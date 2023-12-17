@@ -1,0 +1,115 @@
+﻿@page "/"
+@inject IDbContextFactory<AppDbContext> DbFactory
+@rendermode InteractiveServer
+@inject IDialogService DialogService
+@inject IToastService ToastService
+
+<PageTitle>Customers</PageTitle>
+
+
+@if(Customers is null){
+    <FluentProgressRing Style="width:30px;height:30px"/>
+}else{
+
+<FluentGrid
+Justify="JustifyContent.Center"
+Style="margin-top:20px;margin-bottom:20px;"
+>
+        <FluentGridItem Style="border:1px solid #ddd; border-radius:5px"  xs="8"
+        >
+        <FluentStack>
+            <FluentLabel Typo="Typography.PaneHeader">
+                Customer
+            </FluentLabel>
+            <FluentSpacer/>
+            <FluentAnchor
+            Href="/customer-form"
+             IconStart="@(new Icons.Regular.Size24.PersonAdd().WithColor(Color.Success))">
+                Add New Customer
+            </FluentAnchor>
+        </FluentStack>
+            <FluentDataGrid Items="@Customers">
+                <PropertyColumn Property="@(p => p.Id)" Sortable="true" />
+                    <TemplateColumn Title="Avatar" Align="@Align.Start">
+                        <FluentPersona
+                        ImageSize="30px"
+                        Initials="@context!.Name[0]!.ToString().ToUpper()"
+                        />
+                    </TemplateColumn>
+                <PropertyColumn Property="@(p => p.Name)" Sortable="true" />
+                <PropertyColumn Property="@(p => p.Email)" Sortable="true" />
+                    <TemplateColumn Title="Actions" Align="@Align.End">
+                        <FluentButton Appearance="Appearance.Outline" OnClick="()=>ShowConfirmAsync(context.Id)"
+                            IconStart="@(new Icons.Regular.Size24.Delete().WithColor(Color.Error))">Delete</FluentButton>
+
+                            <FluentAnchor 
+                        IconStart="@(new Icons.Regular.Size24.Edit().WithColor(Color.Lightweight))"
+                        Appearance="Appearance.Accent"
+                        Href="@($"/customer-form/{context.Id}")">Edit</FluentAnchor>
+                    </TemplateColumn>
+            </FluentDataGrid>
+        </FluentGridItem>
+</FluentGrid>
+
+}
+
+
+@code{
+
+    private AppDbContext? Context {get;set;}
+    private IQueryable<Customer>? Customers;
+    protected  override async Task OnInitializedAsync()
+    {
+        Context = DbFactory.CreateDbContext();
+        await LoadCustomers();
+        await base.OnInitializedAsync();
+
+    }
+
+
+    private async Task ShowConfirmAsync(int id){
+        var dialog = await DialogService.ShowConfirmationAsync("Are  you sure want to delete?","Yes","No","Delete Customer");
+        var result =  await dialog.Result;
+
+        if(!result.Cancelled){
+            Delete(id);
+        }
+    }
+
+    private async void Delete(int id)
+    {
+        var customer = await Context!.Customers.SingleOrDefaultAsync(c=>c.Id==id);
+
+        if(customer is null)
+        {
+            ToastService.ShowError($"Customer with {id} not found");
+            return;
+        }
+
+        Context!.Customers.Remove(customer);
+        var result = Context!.SaveChanges();
+
+
+        if(result > 0)
+        {
+            ToastService.ShowSuccess("Customer Successfully Deleted!");
+            await LoadCustomers();
+        }else{
+            ToastService.ShowError("Customer Couldn't delete");
+        }
+    }
+
+    
+
+    private async Task LoadCustomers(){
+        var result = await Context!.Customers.ToListAsync();
+        Customers = result.AsQueryable();
+    }
+
+
+    public void Dispose()
+    {
+        Context?.Dispose();
+    }
+
+}
